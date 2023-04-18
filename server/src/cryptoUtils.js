@@ -2,6 +2,7 @@ const { secp256k1 } = require("ethereum-cryptography/secp256k1");
 const { keccak256 } = require("ethereum-cryptography/keccak");
 const { publicKeyConvert } = require("ethereum-cryptography/secp256k1-compat");
 const { toHex } = require("ethereum-cryptography/utils");
+const { utf8ToBytes } = require("ethereum-cryptography/utils");
 const { Signature } = secp256k1;
 
 function getAddressFromPublicKey(publicKey) {
@@ -25,8 +26,10 @@ function decompressPublicKey(publicKey) {
 }
 
 function getPublicKeyFromSignature(signature, message) {
+    const byteMessage = utf8ToBytes(JSON.stringify(message));
+    const messageHash = keccak256(byteMessage);
+
     const signatureFromHex = Signature.fromCompact(signature.hex).addRecoveryBit(signature.recovery);
-    const messageHash = keccak256(Uint8Array.from(message));
     const recoveredPublicKey = signatureFromHex.recoverPublicKey(messageHash).toRawBytes(false);
 
     return recoveredPublicKey;
