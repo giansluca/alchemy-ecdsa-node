@@ -35,7 +35,15 @@ function getPublicKeyFromSignature(signature, message) {
     return recoveredPublicKey;
 }
 
+function verifySignature(signature, message, publicKey) {
+    const byteMessage = utf8ToBytes(JSON.stringify(message));
+    const messageHash = keccak256(byteMessage);
+
+    return secp256k1.verify(signature.hex, messageHash, publicKey);
+}
+
 module.exports = {
     getAddressFromPublicKey: getAddressFromPublicKey,
     getPublicKeyFromSignature: getPublicKeyFromSignature,
+    verifySignature: verifySignature,
 };

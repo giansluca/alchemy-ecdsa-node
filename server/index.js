@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { getPublicKeyFromSignature, getAddressFromPublicKey } = require("./src/cryptoUtils");
+const { getPublicKeyFromSignature, getAddressFromPublicKey, verifySignature } = require("./src/cryptoUtils");
 const app = express();
 const port = 3042;
 
@@ -20,26 +20,51 @@ app.get("/balance/:address", (req, res) => {
 });
 
 app.post("/send", (req, res) => {
-    const { transaction } = req.body;
-    const recipient = transaction.message.recipient;
-    const amount = transaction.message.amount;
+    try {
+        const { transaction } = req.body;
+        const recipientAddress = transaction.message.recipient;
+        const amount = transaction.message.amount;
 
-    // getting sender public key (and address) from signature and message
-    const publicKey = getPublicKeyFromSignature(transaction.signature, transaction.message);
-    const sender = `0x${getAddressFromPublicKey(publicKey)}`;
+        // getting sender public key (and address) from signature and message and verify
+        const senderPublicKey = getPublicKeyFromSignature(transaction.signature, transaction.message);
+        if (!senderPublicKey) {
+            console.warn("Error extracting public key from signature");
+            res.status(400).send({ message: "Error extracting public key from signature" });
+        }
 
-    if (!balances[sender]) {
-        console.warn(`Sender: ${sender} not found!`);
-        res.status(400).send({ message: `Sender: ${sender} not found!` });
+        const isVerified = verifySignature(transaction.signature, transaction.message, senderPublicKey);
+        if (!isVerified) {
+            console.warn("Signature not verified!");
+            res.status(400).send({ message: "Signature not verified!" });
+        }
+
+        const senderAddress = `0x${getAddressFromPublicKey(senderPublicKey)}`;
+        if (!balances[senderAddress]) {
+            console.warn(`Sender: ${senderAddress} not found!`);
+            res.status(400).send({ message: `Sender: ${senderAddress} not found!` });
+            return;
+        }
+
+        console.log(`Sender address: ${senderAddress} OK - Signature verified: ${isVerified}`);
+
+        if (balances[senderAddress] < amount) {
+            console.warn("Not enough funds!");
+            res.status(400).send({ message: "Not enough funds!" });
+            return;
+        }
+
+        if (!balances[recipientAddress]) {
+            console.warn(`Recipient: ${recipientAddress} not found!`);
+            res.status(400).send({ message: `Recipient: ${recipientAddress} not found!` });
+            return;
+        }
+
+        balances[senderAddress] -= amount;
+        balances[recipientAddress] += amount;
+        res.send({ balance: balances[senderAddress] });
+    } catch (err) {
+        res.status(500).send({ message: err.message });
         return;
-    }
-
-    if (balances[sender] < amount) {
-        res.status(400).send({ message: "Not enough funds!" });
-    } else {
-        balances[sender] -= amount;
-        balances[recipient] += amount;
-        res.send({ balance: balances[sender] });
     }
 });
 
